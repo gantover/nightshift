@@ -109,7 +109,8 @@ export const sbxProvider = (options: SbxOptions = {}): IsolatedSandboxProvider =
       };
 
       // Mountless sandbox: no workspace path, so nothing on the host is shared.
-      const createArgs = ["create", "--name", name, "--no-progress"];
+      // No --no-progress: it only exists from sbx v0.48, and we capture the output anyway.
+      const createArgs = ["create", "--name", name];
       if (options.template) createArgs.push("--template", options.template);
       createArgs.push(options.agent ?? "opencode");
       await must(createArgs, "create");

@@ -25,6 +25,11 @@ export async function spike(keep = false) {
     console.log(`${ok ? "PASS" : "FAIL"}  ${check}  ${detail.trim().split("\n")[0] ?? ""}`);
   };
 
+  try {
+    console.log(`sbx: ${execFileSync("sbx", ["version"], { encoding: "utf8" }).trim().split("\n")[0]}`);
+  } catch {
+    console.log("sbx: version unknown");
+  }
   const repo = await mkdtemp(join(tmpdir(), "nightshift-spike-"));
   const git = (...a: string[]) => execFileSync("git", a, { cwd: repo, encoding: "utf8" });
   git("init", "-q", "-b", "main");

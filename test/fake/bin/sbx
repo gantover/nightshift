@@ -3,7 +3,7 @@
 echo "sbx $*" >> "$FAKE_SBX_LOG"
 cmd=$1; shift
 case $cmd in
-  create) exit 0 ;;
+  create) [[ " $* " == *" --no-progress "* ]] && { echo "error: unknown flag: --no-progress" >&2; exit 1; }; exit 0 ;;
   exec)
     detach=0; while [[ $1 == -* ]]; do [[ $1 == -d ]] && detach=1; shift; done
     shift; [[ $1 == -- ]] && shift
