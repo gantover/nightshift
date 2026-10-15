@@ -1,0 +1,28 @@
+{
+  "name": "nightshift",
+  "version": "0.1.0",
+  "description": "Plan by day, build by night: Sandcastle + Docker Sandboxes + OpenCode.",
+  "scripts": {
+    "ns": "tsx src/cli.ts",
+    "spike": "tsx src/cli.ts spike",
+    "preflight": "tsx src/cli.ts preflight",
+    "night": "tsx src/cli.ts night",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "^0.12.0",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "ns": "src/cli.ts"
+  }
+}

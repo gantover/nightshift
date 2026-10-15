@@ -1,0 +1,20 @@
+# systemd user unit: one night run for a project.
+#   cp host/nightshift-night@.service ~/.config/systemd/user/
+#   systemctl --user start "nightshift-night@$(systemd-escape --path ~/code/my-site).service"
+# The instance name is the escaped repo path. systemd-inhibit keeps the laptop awake;
+# Restart=on-failure resumes from saved state if the runner crashes.
+[Unit]
+Description=Nightshift night run for %I
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/nightshift
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:idle:handle-lid-switch --who=nightshift --why="night run" npx tsx src/cli.ts night %I
+Restart=on-failure
+RestartSec=60
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target

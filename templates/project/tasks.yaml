@@ -1,0 +1,22 @@
+# Written by the planner (ns plan). Example shape; replace it.
+project: example-site
+tasks:
+  - id: scaffold
+    title: Scaffold the site with a passing build
+    goal: |
+      An Astro site with the home route rendering a placeholder, a build script,
+      and a Playwright smoke test that loads "/".
+    closes: []
+    depends_on: []
+    verify:
+      - npm ci
+      - npm run build
+      - npx playwright test smoke
+  - id: integration
+    title: Full suite green
+    goal: Everything in SPEC.md's acceptance table passes together.
+    closes: []
+    depends_on: [scaffold]
+    verify:
+      - npm ci
+      - npm test
