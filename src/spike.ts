@@ -101,5 +101,5 @@ export async function spike(keep = false) {
 
   console.log("\n| Check | Result | Detail |\n| --- | --- | --- |");
   for (const [c, ok, d] of rows) console.log(`| ${c} | ${ok ? "PASS" : "FAIL"} | ${d.replace(/\|/g, "\\|")} |`);
-  console.log(`\nPaste this table back into the design doc's spike section.`);
+  console.log(`\n${rows.filter((r) => !r[1]).length} check(s) failed. See README "The spike" for what each one tests.`);
 }
