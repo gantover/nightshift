@@ -7,7 +7,8 @@
     "spike": "tsx src/cli.ts spike",
     "preflight": "tsx src/cli.ts preflight",
     "night": "tsx src/cli.ts night",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "bash test/fake/run.sh"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.12.0",

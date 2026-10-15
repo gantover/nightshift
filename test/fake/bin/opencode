@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Fake OpenCode: behaves per --agent; emits run --format json events.
+agent=builder; prev=""; for a in "$@"; do [[ $prev == --agent ]] && agent=$a; prev=$a; done
+echo '{"type":"step_start","sessionID":"ses_fake"}'
+case $agent in
+  builder)  id=$(grep -o 'task: [a-z0-9-]*' <<<"$*" | head -1 | cut -d' ' -f2)
+            echo "$id" >> built.txt; git add built.txt; git -c user.email=a@b -c user.name=fake commit -qm "$id: build"
+            out="built $id <promise>COMPLETE</promise>" ;;
+  reviewer) out='looks fine <verdict>{\"pass\": true, \"issues\": []}</verdict>' ;;
+  reporter) echo "# Morning" > MORNING.md; git add MORNING.md; git -c user.email=a@b -c user.name=fake commit -qm "morning report"
+            out="report <promise>COMPLETE</promise>" ;;
+esac
+echo "{\"type\":\"text\",\"part\":{\"type\":\"text\",\"text\":\"$out\"}}"
+echo '{"type":"step_finish","part":{"type":"step-finish","cost":0.01,"tokens":{"input":10,"output":5}}}'

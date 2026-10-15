@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Fake sbx for test/fake/run.sh: "the sandbox" is the local machine.
+echo "sbx $*" >> "$FAKE_SBX_LOG"
+cmd=$1; shift
+case $cmd in
+  create) exit 0 ;;
+  exec)
+    detach=0; while [[ $1 == -* ]]; do [[ $1 == -d ]] && detach=1; shift; done
+    shift; [[ $1 == -- ]] && shift
+    (( detach )) && exit 0
+    exec "$@" ;;
+  cp)
+    src=$(sed -E 's/^nightshift-[a-z0-9]+://' <<<"$1"); dst=$(sed -E 's/^nightshift-[a-z0-9]+://' <<<"$2")
+    mkdir -p "$(dirname "$dst")"; cp -a "$src" "$dst" ;;
+  rm) exit 0 ;;
+esac
