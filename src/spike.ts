@@ -58,7 +58,12 @@ export async function spike(keep = false) {
   await probe("OPENCODE_API_KEY is a placeholder, not the key", "printenv OPENCODE_API_KEY | cut -c1-7", (o) => o.trim().length > 0 && !o.startsWith("sk-"));
   await probe("local model reachable", "curl -s -m 5 http://host.docker.internal:8080/v1/models | head -c 200", (o) => o.includes("data"));
   await probe("/dev/kvm (Android emulator)", "test -e /dev/kvm && echo present || echo absent", (o) => o.includes("present"));
-  await probe("tools from setup", "for b in rg fd ast-grep rtk playwright-cli; do command -v $b >/dev/null && echo ok:$b || echo missing:$b; done", (o) => !o.includes("missing"));
+  await probe(
+    "tools from setup",
+    // One line, so the table shows what's missing (the full setup log is in the [sbx] lines above).
+    "m=; for b in rg fd jq ast-grep rtk playwright-cli; do command -v $b >/dev/null || m=\"$m $b\"; done; echo \"${m:+missing:$m}${m:-all present}\"",
+    (o) => o.includes("all present"),
+  );
 
   const key = cfg.roles.builder![0]!;
   const raw: string[] = [];
