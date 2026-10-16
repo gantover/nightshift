@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "npm run spike*": "ask",
+      "npm run night*": "ask",
+      "npm run preflight*": "ask",
+      "npx tsx src/cli.ts *": "ask",
+      "sbx *": "ask",
+      "git push*": "ask"
+    }
+  }
+}

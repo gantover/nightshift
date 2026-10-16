@@ -55,7 +55,9 @@ Set global secrets **before** creating sandboxes; existing ones don't pick them 
 
 Fix what fails, then paste the table into the design doc.
 
-`npm test` runs a whole night against fake `sbx` and `opencode` binaries (no VM, no tokens). Use it after changing the loop.
+`npm run check` typechecks and runs a whole night against fake `sbx` and `opencode` binaries (no VM, no tokens). Use it after changing the loop.
+
+Working on this repo with OpenCode or Claude Code: both read `AGENTS.md` (repo map, commands, rules). Spike, night and `sbx` commands are set to ask before running, in `opencode.json` and `.claude/settings.json`.
 
 ## Switching harness
 
@@ -84,7 +86,7 @@ src/budget.ts        Go cap tracking, model fallback
 src/tasks.ts         tasks.yaml schema, night state (~/.local/state/nightshift)
 src/spike.ts         stack proof
 src/preflight.ts     pre-bed checks
-opencode/            config, agents (planner, builder, reviewer, reporter), skills (grill, write-spec, plan-tasks)
+opencode/            payload copied into each sandbox: config, agents, skills for the night agents
 prompts/             per-turn briefs the runner fills in
 templates/project/   SPEC.md, AGENTS.md, tasks.yaml, DECISIONS.md for `ns init`
 policies/            sbx network policies

@@ -8,7 +8,8 @@
     "preflight": "tsx src/cli.ts preflight",
     "night": "tsx src/cli.ts night",
     "typecheck": "tsc",
-    "test": "bash test/fake/run.sh"
+    "test": "bash test/fake/run.sh",
+    "check": "tsc && bash test/fake/run.sh"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.12.0",

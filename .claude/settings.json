@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm ci)",
+      "Bash(npm test)",
+      "Bash(npm run check)",
+      "Bash(npm run typecheck)",
+      "Bash(npx tsc *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
+    ],
+    "ask": [
+      "Bash(npm run spike *)",
+      "Bash(npm run night *)",
+      "Bash(npm run preflight *)",
+      "Bash(npx tsx src/cli.ts *)",
+      "Bash(sbx *)",
+      "Bash(git push *)"
+    ]
+  }
+}

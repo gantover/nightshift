@@ -9,7 +9,7 @@ sandbox:
   keep: false              # true = leave the sandbox up after the night for debugging
   seed:                    # host → sandbox, copied right after creation
     - { from: opencode/opencode.json, to: /home/agent/.config/opencode/opencode.json }
-    - { from: opencode/agent, to: /home/agent/.config/opencode/agent }
+    - { from: opencode/agents, to: /home/agent/.config/opencode/agents }
     - { from: opencode/skills, to: /home/agent/.config/opencode/skills }
     - { from: sandbox/setup.sh, to: /home/agent/.nightshift/setup.sh }
   setup:
