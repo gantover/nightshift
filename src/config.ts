@@ -15,12 +15,12 @@ const Config = z.object({
     setup: z.array(z.string()).default([]),
     keep: z.boolean().default(false),
   }),
-  roles: z.record(z.string(), z.array(z.string()).min(1)),
-  budgets: z.object({
-    monthlyUsd: z.record(z.string(), z.number()),
-    fiveHourShare: z.number().default(0.2),
-    weekShare: z.number().default(0.5),
-    safety: z.number().default(0.8),
+  // OpenCode model ids per agent; later entries are fallbacks from attempt 3 on.
+  models: z.object({
+    planner: z.array(z.string()).min(1),
+    builder: z.array(z.string()).min(1),
+    reviewer: z.array(z.string()).min(1),
+    reporter: z.array(z.string()).min(1),
   }),
   night: z.object({
     stopAt: z.string().regex(/^\d\d:\d\d$/),
@@ -40,6 +40,10 @@ export async function loadConfig(
   cfg.sandbox.seed = cfg.sandbox.seed.map((s) => ({ ...s, from: isAbsolute(s.from) ? s.from : resolve(ROOT, s.from) }));
   return cfg;
 }
+
+/** Attempts 1 and 2 use the first model (2 gets the failure context); 3+ move down the list. */
+export const pickModel = (chain: string[], attempt: number) =>
+  chain[Math.min(Math.max(0, attempt - 2), chain.length - 1)]!;
 
 /** Next occurrence of HH:MM local time, at least an hour from now. */
 export function deadline(stopAt: string, now = new Date()): Date {

@@ -6,15 +6,15 @@ Plan a project with an agent in the evening; it builds unattended overnight; you
 | --- | --- |
 | Orchestration | [Sandcastle](https://github.com/mattpocock/sandcastle) (`createSandbox`, `run`, `exec`, commit merge-back) |
 | Isolation | Docker Sandboxes (`sbx`) microVM, via `src/sandbox/sbx.ts` (a Sandcastle provider) |
-| Harness | OpenCode by default; pi, Claude Code, Codex selectable per role (`src/harness.ts`) |
-| Models | OpenCode Go + local Qwen3.8-Flash-Next on llama.cpp, routed per role with budget fallbacks |
+| Harness | OpenCode (planner, builder, reviewer, reporter agents in `opencode/agents/`) |
+| Models | Local Qwen3.8-Flash-Next on llama.cpp (free); OpenCode Go entries optional as fallbacks |
 | Secrets, network | sbx keychain + credential proxy, deny-all policy (`policies/build.sh`) |
 
 ## How a night works
 
 1. `ns plan <repo>`: an interactive OpenCode planner, inside a sandbox, interviews you and commits `SPEC.md` + `tasks.yaml` to branch `nightshift/plan`. Merge it.
-2. `ns preflight <repo>`: checks secrets, local model, task file, budgets, stop time.
-3. `ns night <repo>` (via the systemd unit): one sandbox for the night, one fresh agent session per task. The runner, not the agent, runs each task's `verify` commands; a reviewer on another model family reads the diff; failures retry with the error, then a different model, then the task is parked. Spend is read from OpenCode's event stream and checked against Go's 5-hour, weekly and monthly caps.
+2. `ns preflight <repo>`: checks secrets, local model, task file, stop time.
+3. `ns night <repo>` (via the systemd unit): one sandbox for the night, one fresh agent session per task. The runner, not the agent, runs each task's `verify` commands; a reviewer on another model family reads the diff; failures retry with the error, then a different model, then the task is parked. OpenCode Go enforces its own usage caps; a capped model just fails the attempt and the next one moves down the list.
 4. Morning: commits are on branch `nightshift/<date>` in your repo, `MORNING.md` on top, and a phone push via ntfy.
 
 The referee stays on the host: `tasks.yaml` is read once at launch, verify commands and state never come from the sandbox.
@@ -24,10 +24,15 @@ The referee stays on the host: `tasks.yaml` is read once at launch, verify comma
 ```bash
 git clone <this repo> ~/nightshift && cd ~/nightshift && npm ci
 
-# 1. Local model as a user service on :8080 (llama-server or llama-swap, Qwen3.8-Flash-Next + mmproj).
+# 1. Local model on :8080 (run it as a user service). ROCm build of llama.cpp (-DGPU_TARGETS=gfx1151).
+#    UD-IQ4_XS (~94 GB) leaves ~30 GiB for the desktop and the sbx sandbox; UD-Q4_K_XL (111 GB) is a bit better but leaves ~10.
+#    --jinja: tool calling. --alias: the id opencode/opencode.json and nightshift.yaml use.
+#    -c must be >= the "limit.context" in opencode/opencode.json.
+llama-server -hf unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS --alias qwen3.8-flash-next --jinja -ngl 999 -fa on \
+  -c 65536 --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0 --host 127.0.0.1 --port 8080
 
 # 2. Secrets: kept in your keyring; the sandbox only sees placeholders.
-sbx secret set-custom --host opencode.ai --env OPENCODE_API_KEY --value "$OPENCODE_API_KEY"
+sbx secret set-custom --host opencode.ai --env OPENCODE_API_KEY --value "$OPENCODE_API_KEY"  # only if you list opencode-go models
 sbx secret set github --command 'gh auth token'      # better: a fine-grained PAT for the night repos
 # Cloudflare (preview deploys), scoped to Pages/Workers edit:
 sbx secret set-custom --host api.cloudflare.com --env CLOUDFLARE_API_TOKEN --value "$CLOUDFLARE_API_TOKEN"
@@ -48,9 +53,8 @@ Set global secrets **before** creating sandboxes; existing ones don't pick them 
 - `sbx create` without a workspace path (mountless), `sbx exec -i/-d/-it`, `sbx cp` with docker-cp semantics;
 - the keep-alive sleeper preventing auto-stop between execs;
 - the Go key arriving as a placeholder and being swapped by the proxy on `opencode.ai`;
-- OpenCode's `step_finish` events carrying `tokens` and `cost` (`src/budget.ts`);
 - reaching llama-server at `host.docker.internal:8080`;
-- whether `/dev/kvm` exists (Android emulator yes/no);
+- websearch: `OPENCODE_ENABLE_EXA` set and `mcp.exa.ai` allowed by the policy;
 - which tools `sandbox/setup.sh` managed to install.
 
 Fix what fails, then paste the table into the design doc.
@@ -59,30 +63,11 @@ Fix what fails, then paste the table into the design doc.
 
 Working on this repo with OpenCode or Claude Code: both read `AGENTS.md` (repo map, commands, rules). Spike, night and `sbx` commands are set to ask before running, in `opencode.json` and `.claude/settings.json`.
 
-## Switching harness
-
-Role chains in `nightshift.yaml` are `harness:provider/model`:
-
-```yaml
-builder: [pi:opencode-go/kimi-k2.7-code, opencode:opencode-go/minimax-m3]
-```
-
-The harness CLI must exist in the sandbox (`sandbox/setup.sh` or the template). What Sandcastle gives each one today:
-
-| Harness | Session resume | Token usage | Notes |
-| --- | --- | --- | --- |
-| opencode | no | parsed by Nightshift from events | Native Go provider; built-in sbx agent |
-| pi | yes | parsed by Nightshift (TODO) | Validated Go client; minimal prompt |
-| claude-code | yes | parsed by Sandcastle | Sandcastle's reference harness; needs an Anthropic key |
-| codex | yes | not yet | |
-
 ## Layout
 
 ```
 src/sandbox/sbx.ts   Sandcastle provider for Docker Sandboxes
-src/harness.ts       harness:model → Sandcastle agent
 src/night.ts         the loop: build → verify → review → commit/retry/park → report
-src/budget.ts        Go cap tracking, model fallback
 src/tasks.ts         tasks.yaml schema, night state (~/.local/state/nightshift)
 src/spike.ts         stack proof
 src/preflight.ts     pre-bed checks
@@ -96,8 +81,5 @@ test/fake/           fake sbx + opencode for a token-free dry run
 
 ## Not done yet
 
-- Vision judge (screenshots vs `inputs/` sketches, local model) and the web/Android/research verifier packs.
-- Research sandbox profile with web access and no publishing credentials.
 - Detecting weakened tests in a diff (today only the reviewer prompt guards it).
-- rtk and ponytail hooks for OpenCode; baking `setup.sh` into a saved template.
-- Parallel lanes.
+- ponytail plugin for OpenCode; baking `setup.sh` into a saved template.

@@ -1,6 +1,6 @@
 ---
 name: night-debug
-description: Diagnose a Nightshift night that went wrong (parked tasks, crashes, overspend, missing commits) from its state, logs and spend ledger, then propose the smallest fix.
+description: Diagnose a Nightshift night that went wrong (parked tasks, crashes, missing commits) from its state and logs, then propose the smallest fix.
 ---
 
 # Debug a night
@@ -13,8 +13,7 @@ Read-only until you have a diagnosis. Never rerun a night or the spike without t
    - `parked` with "Reviewer rejected": read `logs/<task>-a<N>-review.log`. Is the issue real, or is the reviewer too strict? If too strict, the fix goes in `prompts/reviewer.md`.
    - `parked` with "Agent run failed": usually idle timeout, task timeout or the deadline. Check the end of that log and the timestamps.
    - `pending`: a dependency was parked, or the deadline hit first.
-3. **Spend.** Sum `~/.local/state/nightshift/spend.jsonl` per model for the night (`ts` ≥ `startedAt`). A model missing from the ledger means its usage lines weren't parsed: check `usageFromOpenCodeLine` in `src/budget.ts` against a raw `step_finish` line from a log.
-4. **Commits.** `git log --oneline nightshift/<date>` in the project. Commits in the log but missing on the branch point at Sandcastle's patch extraction or the sbx provider's `copyFileOut`.
-5. **Sandbox problems** (setup, network): rerun only with the user's go-ahead, with `sandbox.keep: true`, then inspect with `sbx exec <name> -- bash` and `sbx policy log`.
+3. **Commits.** `git log --oneline nightshift/<date>` in the project. Commits in the log but missing on the branch point at Sandcastle's patch extraction or the sbx provider's `copyFileOut`.
+4. **Sandbox problems** (setup, network): rerun only with the user's go-ahead, with `sandbox.keep: true`, then inspect with `sbx exec <name> -- bash` and `sbx policy log`.
 
 Report: one line per problem, the evidence (file and line), and the smallest fix. If the fix is in the runner, reproduce it in `test/fake/` first when possible.

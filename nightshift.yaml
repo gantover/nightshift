@@ -1,6 +1,6 @@
-# Nightshift configuration. Model ids and caps from the OpenCode Go docs, 2026-10-15.
-# Role chains are "harness:provider/model"; the first entry is preferred, later
-# ones are fallbacks (budget or attempt 3+). Harnesses: opencode, pi, claude-code, codex.
+# Nightshift configuration.
+# Each agent gets a list of OpenCode models: the first is preferred, later ones
+# are fallbacks from attempt 3 on (Go enforces its own usage caps).
 
 sandbox:
   agent: opencode          # sbx agent type: base template + proxy credential wiring
@@ -15,33 +15,13 @@ sandbox:
   setup:
     - bash /home/agent/.nightshift/setup.sh
 
-roles:
-  planner:  [opencode:opencode-go/kimi-k3, opencode:opencode-go/glm-5.3]
-  builder:
-    - opencode:opencode-go/kimi-k2.7-code
-    - opencode:opencode-go/minimax-m3
-    - opencode:opencode-go/qwen3.7-plus
-    - opencode:local/qwen3.8-flash-next
-  # A different model family from the builder, so it doesn't share its blind spots.
-  reviewer: [opencode:opencode-go/glm-5.2, opencode:opencode-go/deepseek-v4-pro]
-  reporter: [opencode:opencode-go/glm-5.3, opencode:opencode-go/kimi-k3]
-  # Bulk, small-context work (log digests, page summaries, screenshot judging).
-  local:    [opencode:local/qwen3.8-flash-next]
-
-budgets:
-  # Monthly allowance per model on the $10 Go plan. Models missing here
-  # (the local one) are never budget-limited.
-  monthlyUsd:
-    opencode-go/kimi-k3: 15
-    opencode-go/kimi-k2.7-code: 60
-    opencode-go/glm-5.3: 15
-    opencode-go/glm-5.2: 60
-    opencode-go/minimax-m3: 60
-    opencode-go/qwen3.7-plus: 60
-    opencode-go/deepseek-v4-pro: 15
-  fiveHourShare: 0.2   # Go: 20% of the month per 5 hours
-  weekShare: 0.5       # Go: 50% per week
-  safety: 0.8          # leave room for daytime use Nightshift can't see
+models:
+  # All local (llama-server on the Z13): a night costs nothing. Add opencode-go/* entries
+  # after the local one to fall back to paid models from attempt 3.
+  planner:  [local/qwen3.8-flash-next]
+  builder:  [local/qwen3.8-flash-next]
+  reviewer: [local/qwen3.8-flash-next]
+  reporter: [local/qwen3.8-flash-next]
 
 night:
   stopAt: "06:30"           # building stops 30 min earlier; the rest is the report

@@ -5,9 +5,7 @@
 import { execFileSync } from "node:child_process";
 import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { Budget } from "./budget.js";
 import { deadline, loadConfig } from "./config.js";
-import { parseSpec } from "./harness.js";
 import { loadTasks } from "./tasks.js";
 
 export async function preflight(repoArg: string): Promise<boolean> {
@@ -25,9 +23,10 @@ export async function preflight(repoArg: string): Promise<boolean> {
 
   const cfg = await loadConfig();
   await check("sbx installed", () => sh("sbx", ["version"]).split("\n")[0]!);
-  await check("secrets stored (Go key, GitHub)", () => {
+  const usesGo = Object.values(cfg.models).flat().some((m) => m.startsWith("opencode-go/"));
+  await check(`secrets stored (${usesGo ? "Go key, " : ""}GitHub)`, () => {
     const out = sh("sbx", ["secret", "ls"]);
-    for (const needle of ["opencode.ai", "github"]) {
+    for (const needle of usesGo ? ["opencode.ai", "github"] : ["github"]) {
       if (!out.includes(needle)) throw new Error(`no secret mentioning ${needle}; see README step 2`);
     }
     return "found";
@@ -47,17 +46,7 @@ export async function preflight(repoArg: string): Promise<boolean> {
   });
   await check("tasks.yaml valid", async () => {
     const f = await loadTasks(repo);
-    for (const t of f.tasks) parseSpec(cfg.roles[t.role]?.[0] ?? `missing role ${t.role}`);
     return `${f.tasks.length} tasks`;
-  });
-  await check("roles resolve", () => {
-    for (const chain of Object.values(cfg.roles)) for (const spec of chain) parseSpec(spec);
-    return Object.keys(cfg.roles).join(", ");
-  });
-  await check("budget headroom", async () => {
-    const b = new Budget(cfg);
-    await b.load();
-    return ["builder", "reviewer", "reporter"].map((r) => `${r}→${b.pick(r, 1)}`).join("  ");
   });
   await check("stop time", () => deadline(cfg.night.stopAt).toLocaleString());
   console.log(ok ? "\nReady for the night." : "\nFix the failures above before launching.");

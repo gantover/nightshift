@@ -18,7 +18,6 @@ export const Task = z.object({
   closes: z.array(z.string()).default([]), // acceptance criteria ids from SPEC.md
   depends_on: z.array(z.string()).default([]),
   verify: z.array(z.string()).min(1, "every task needs at least one verify command"),
-  role: z.string().default("builder"),
   max_attempts: z.number().optional(),
   timeout_minutes: z.number().optional(),
   notes: z.string().optional(),

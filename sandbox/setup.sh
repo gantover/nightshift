@@ -14,6 +14,9 @@ grep -q 'nightshift-path' "$HOME/.profile" 2>/dev/null ||
   echo 'export PATH="$HOME/.local/bin:$PATH" # nightshift-path' >>"$HOME/.profile"
 export PATH="$HOME/.local/bin:$PATH"
 
+# websearch for non-Go models: Exa's hosted MCP, no key (allowed in policies/build.sh).
+grep -q 'OPENCODE_ENABLE_EXA' "$HOME/.profile" 2>/dev/null || echo 'export OPENCODE_ENABLE_EXA=1' >>"$HOME/.profile"
+
 step "apt: ripgrep fd jq"
 if command -v apt-get >/dev/null; then
   { sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep fd-find jq; } 2>&1 | tail -3 || warn "apt"

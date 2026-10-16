@@ -3,13 +3,11 @@
  * inside `sandbox.run()`. One sandbox for the whole night (warm deps, one
  * branch), one fresh agent session per task.
  */
-import { createSandbox, type AgentStreamEvent, type Sandbox } from "@ai-hero/sandcastle";
+import { createSandbox, opencode, type Sandbox } from "@ai-hero/sandcastle";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { Budget, usageFromOpenCodeLine } from "./budget.js";
-import { deadline, loadConfig, type Config } from "./config.js";
-import { harnessInfo, makeAgent, parseSpec } from "./harness.js";
+import { deadline, loadConfig, pickModel, type Config } from "./config.js";
 import { notify } from "./notify.js";
 import { prompt, tail } from "./prompts.js";
 import { sbxProvider } from "./sandbox/sbx.js";
@@ -25,40 +23,30 @@ interface Ctx {
   cfg: Config;
   repo: string;
   sb: Sandbox;
-  budget: Budget;
   state: NightState;
   stop: AbortSignal;
 }
 
-/** Run one agent turn for a role, accounting spend from the raw event stream. */
+/** Run one OpenCode turn as `agent` (builder, reviewer, reporter). */
 async function agentTurn(
   ctx: Ctx,
-  role: string,
-  agentName: string,
+  agent: "builder" | "reviewer" | "reporter",
   attempt: number,
   text: string,
   label: string,
   timeoutMinutes = ctx.cfg.night.taskTimeoutMinutes,
 ) {
-  const key = ctx.budget.pick(role, attempt);
-  const spec = parseSpec(key);
-  const pending: Promise<void>[] = [];
-  const onEvent = (e: AgentStreamEvent) => {
-    if (e.type !== "raw" || harnessInfo(spec).usage) return;
-    const u = usageFromOpenCodeLine(e.line);
-    if (u) pending.push(ctx.budget.record(key, u));
-  };
+  const model = pickModel(ctx.cfg.models[agent], attempt);
   await mkdir(logDir(ctx.repo), { recursive: true });
   const res = await ctx.sb.run({
-    agent: makeAgent(spec, agentName),
+    agent: opencode(model, { agent }),
     prompt: text,
     name: label,
     idleTimeoutSeconds: ctx.cfg.night.idleTimeoutSeconds,
-    logging: { type: "file", path: join(logDir(ctx.repo), `${label}.log`), onAgentStreamEvent: onEvent },
+    logging: { type: "file", path: join(logDir(ctx.repo), `${label}.log`) },
     signal: AbortSignal.any([ctx.stop, AbortSignal.timeout(timeoutMinutes * 60_000)]),
   });
-  await Promise.all(pending);
-  return { key, res };
+  return { model, res };
 }
 
 async function verify(sb: Sandbox, task: Task) {
@@ -89,8 +77,8 @@ async function runTask(ctx: Ctx, file: TaskFile, task: Task) {
     });
     const label = `${task.id}-a${st.attempts}`;
     try {
-      const { key, res } = await agentTurn(ctx, task.role, "builder", st.attempts, brief, label, task.timeout_minutes);
-      st.models.push(key);
+      const { model, res } = await agentTurn(ctx, "builder", st.attempts, brief, label, task.timeout_minutes);
+      st.models.push(model);
       st.commits.push(...res.commits.map((c) => c.sha));
     } catch (e) {
       st.lastError = `Agent run failed: ${(e as Error).message}`;
@@ -112,7 +100,7 @@ async function runTask(ctx: Ctx, file: TaskFile, task: Task) {
       BASE: st.commits.length ? `${st.commits[0]}^` : "HEAD~1",
     });
     try {
-      const { res } = await agentTurn(ctx, "reviewer", "reviewer", 1, review, `${label}-review`);
+      const { res } = await agentTurn(ctx, "reviewer", 1, review, `${label}-review`);
       const m = [...res.stdout.matchAll(/<verdict>([\s\S]*?)<\/verdict>/g)].at(-1);
       const v = Verdict.parse(JSON.parse(m?.[1] ?? "{}"));
       if (!v.pass) {
@@ -137,11 +125,9 @@ export async function night(repoArg: string) {
   const repo = resolve(repoArg);
   const cfg = await loadConfig();
   const file = await loadTasks(repo); // read once, from the host
-  const budget = new Budget(cfg);
-  await budget.load();
 
   const stopAt = deadline(cfg.night.stopAt);
-  const day = new Date().toISOString().slice(0, 10);
+  const day = new Date().toLocaleDateString("sv-SE"); // local YYYY-MM-DD, matches `date +%F`
   const fresh = (): NightState => ({
     project: file.project,
     branch: `nightshift/${day}`,
@@ -162,7 +148,7 @@ export async function night(repoArg: string) {
   const timer = setTimeout(() => stop.abort(new Error("deadline")), Math.max(0, stopAt.getTime() - Date.now() - 30 * 60_000));
 
   await using sb = await createSandbox({ branch: state.branch, sandbox: sandboxFor(cfg), cwd: repo });
-  const ctx: Ctx = { cfg, repo, sb, budget, state, stop: stop.signal };
+  const ctx: Ctx = { cfg, repo, sb, state, stop: stop.signal };
   await notify(cfg.notify.ntfyUrl, `Nightshift started: ${file.project}`, `${file.tasks.length} tasks, stop at ${cfg.night.stopAt}`, 2);
 
   for (let task = nextTask(file, state); task && !stop.signal.aborted; task = nextTask(file, state)) {
@@ -179,11 +165,10 @@ export async function night(repoArg: string) {
     stoppedBy: stop.signal.aborted ? "deadline" : "task graph finished",
     tasks: file.tasks.map((t) => ({ id: t.id, title: t.title, closes: t.closes, ...state.tasks[t.id] })),
     blockedByParked: file.tasks.filter((t) => state.tasks[t.id]?.status === "pending").map((t) => t.id),
-    spend: budget.summary(state.startedAt),
     runnerNotes: state.decisions ?? "",
   };
   try {
-    await agentTurn({ ...ctx, stop: new AbortController().signal }, "reporter", "reporter", 1,
+    await agentTurn({ ...ctx, stop: new AbortController().signal }, "reporter", 1,
       await prompt("reporter", { FACTS: JSON.stringify(facts, null, 2) }), "morning-report");
   } catch (e) {
     console.error(`Report agent failed: ${(e as Error).message}`);

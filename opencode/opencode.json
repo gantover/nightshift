@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode-go/kimi-k2.7-code",
+  "model": "local/qwen3.8-flash-next",
   "small_model": "local/qwen3.8-flash-next",
   "autoupdate": false,
   "provider": {
@@ -18,7 +18,8 @@
       "models": {
         "qwen3.8-flash-next": {
           "name": "Qwen3.8-Flash-Next (local)",
-          "attachment": true
+          "attachment": true,
+          "limit": { "context": 65536, "output": 8192 }
         }
       }
     }

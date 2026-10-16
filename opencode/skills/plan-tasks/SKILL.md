@@ -22,7 +22,7 @@ tasks:
       - npm ci
       - npm run build
     notes: optional hints, pitfalls, files to look at
-    # optional: role (default builder), max_attempts, timeout_minutes
+    # optional: max_attempts, timeout_minutes
 ```
 
 ## Rules

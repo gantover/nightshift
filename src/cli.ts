@@ -6,11 +6,10 @@
  *   ns preflight <repo>   check everything the night needs
  *   ns night <repo>       run the night (normally via the systemd unit)
  */
-import { createSandbox } from "@ai-hero/sandcastle";
+import { createSandbox, opencode } from "@ai-hero/sandcastle";
 import { appendFile, cp, readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadConfig, ROOT } from "./config.js";
-import { makeAgent, parseSpec } from "./harness.js";
 import { night, sandboxFor } from "./night.js";
 import { preflight } from "./preflight.js";
 import { spike } from "./spike.js";
@@ -43,7 +42,7 @@ switch (cmd) {
     const cfg = await loadConfig();
     await using sb = await createSandbox({ branch: "nightshift/plan", sandbox: sandboxFor(cfg), cwd: repo });
     const r = await sb.interactive({
-      agent: makeAgent(parseSpec(cfg.roles.planner![0]!), "planner"),
+      agent: opencode(cfg.models.planner[0]!, { agent: "planner" }),
       prompt: "Let's plan tonight's project. Read AGENTS.md and inputs/, then start the interview.",
     });
     console.log(`Planning committed ${r.commits.length} change(s) to nightshift/plan. Merge it, then: ns preflight ${arg}`);

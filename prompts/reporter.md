@@ -16,6 +16,5 @@ Write MORNING.md at the repo root, in this order:
 4. **Decisions made for you** — every entry in DECISIONS.md and the runner notes: what, why, how to reverse.
 5. **Parked and blocked** — each task that isn't done, its last error in one or two lines, your best guess at the fix.
 6. **Needs you** — anything only a human may do (production promotion, submissions, paid signups).
-7. **Cost** — spend and tokens per model from the facts.
 
 Plain language, short sentences, no filler. Commit MORNING.md with message "morning report", then print <promise>COMPLETE</promise>.
