@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Fake OpenCode: behaves per --agent; emits run --format json events.
+[[ -n ${OPENCODE_CONFIG_DIR:-} ]] || { echo "OPENCODE_CONFIG_DIR not set: sandbox.env not exported" >&2; exit 1; }
 agent=builder; prev=""; for a in "$@"; do [[ $prev == --agent ]] && agent=$a; prev=$a; done
 echo '{"type":"step_start","sessionID":"ses_fake"}'
 case $agent in

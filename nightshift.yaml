@@ -1,20 +1,19 @@
 # Nightshift configuration.
-# Each agent gets a list of OpenCode models: the first is preferred, later ones
-# are fallbacks from attempt 3 on (Go enforces its own usage caps).
 
 sandbox:
-  agent: opencode          # sbx agent type: base template + proxy credential wiring
-  template: null           # e.g. docker.io/you/nightshift:v1 once you save one (sbx template save)
-  workdir: /home/agent/workspace
-  keep: false              # true = leave the sandbox up after the night for debugging
-  seed:                    # host → sandbox, copied right after creation
-    - { from: opencode/opencode.json, to: /home/agent/.config/opencode/opencode.json }
-    - { from: opencode/agents, to: /home/agent/.config/opencode/agents }
-    - { from: opencode/skills, to: /home/agent/.config/opencode/skills }
-    - { from: sandbox/setup.sh, to: /home/agent/.nightshift/setup.sh }
-  setup:
-    - bash /home/agent/.nightshift/setup.sh
+  agent: opencode        # sbx agent (workload) the night runs in
+  kits: [./kit]          # sbx mixins, paths relative to this repo. Add an entry for a
+                         # browser or another harness's mixin.
+  env:                   # set for every command the runner sends into the sandbox
+    OPENCODE_CONFIG: /opt/nightshift/opencode/opencode.json
+    OPENCODE_CONFIG_DIR: /opt/nightshift/opencode
+    OPENCODE_ENABLE_EXA: "1"   # websearch for non-Go models (hosts allowed in policies/build.sh)
+  keep: false            # true = leave the sandbox up after the night for debugging
 
+# Models per agent: the first is preferred; attempt 3 onwards moves down the list
+# (Go enforces its own usage caps: a capped model just fails the attempt).
+# A bare id runs on OpenCode. Prefix "pi:", "claude-code:" or "codex:" to use that
+# harness instead; its CLI must be in the sandbox (add its mixin to sandbox.kits).
 models:
   # All local (llama-server on the Z13): a night costs nothing. Add opencode-go/* entries
   # after the local one to fall back to paid models from attempt 3.
@@ -29,5 +28,4 @@ night:
   idleTimeoutSeconds: 600
   maxAttempts: 3
 
-notify:
-  ntfyUrl: null             # e.g. https://ntfy.your-rock5.lan/nightshift
+ntfyUrl: null               # e.g. https://ntfy.your-rock5.lan/nightshift

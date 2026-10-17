@@ -1,25 +1,47 @@
 /**
- * The night loop. Deterministic control flow on the host; the LLM only acts
- * inside `sandbox.run()`. One sandbox for the whole night (warm deps, one
- * branch), one fresh agent session per task.
+ * The night loop. Control flow is plain code on the host; the LLM only acts
+ * inside `sb.run()`. One sandbox for the whole night (one branch, warm deps),
+ * one fresh agent session per task:
+ *
+ *   for each ready task: builder → runner runs the task's verify commands → reviewer
+ *                        failed? retry with the error (attempt 3+ on the next model) → else park
+ *   then: reporter writes MORNING.md, phone push
  */
-import { createSandbox, opencode, type Sandbox } from "@ai-hero/sandcastle";
-import { mkdir } from "node:fs/promises";
+import { claudeCode, codex, createSandbox, opencode, pi, type AgentProvider, type Sandbox } from "@ai-hero/sandcastle";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { deadline, loadConfig, pickModel, type Config } from "./config.js";
-import { notify } from "./notify.js";
-import { prompt, tail } from "./prompts.js";
-import { sbxProvider } from "./sandbox/sbx.js";
-import { loadState, loadTasks, logDir, nextTask, saveState, type NightState, type Task, type TaskFile } from "./tasks.js";
+import { deadline, loadConfig, loadState, loadTasks, ROOT, saveState, stateDir, type Config, type NightState, type Task } from "./config.js";
+import { sbxProvider } from "./sbx.js";
 
-const Verdict = z.object({ pass: z.boolean(), issues: z.array(z.string()).default([]) });
+type Role = "planner" | "builder" | "reviewer" | "reporter";
 
-export function sandboxFor(cfg: Config, log = (l: string) => console.log(`[sbx] ${l}`)) {
-  return sbxProvider({ ...cfg.sandbox, template: cfg.sandbox.template ?? undefined, log });
+/** "local/qwen…" runs on OpenCode; "pi:…", "claude-code:…", "codex:…" pick another harness. */
+export function agentFor(spec: string, role: Role): AgentProvider {
+  const [harness, model] = spec.includes(":") ? (spec.split(/:(.*)/s) as [string, string]) : ["opencode", spec];
+  if (harness === "opencode") return opencode(model, { agent: role }); // agents live in kit/opencode/agents
+  if (harness === "pi") return pi(model);
+  if (harness === "claude-code") return claudeCode(model);
+  if (harness === "codex") return codex(model);
+  throw new Error(`Unknown harness "${harness}" in "${spec}"`);
 }
 
-interface Ctx {
+export const sandboxFor = (cfg: Config) => sbxProvider(cfg.sandbox);
+
+/** Attempts 1 and 2 use the first model (2 gets the failure context); 3+ move down the list. */
+const pickModel = (list: string[], attempt: number) => list[Math.min(Math.max(0, attempt - 2), list.length - 1)]!;
+
+/** prompts/<name>.md with {{KEY}} filled in. */
+async function brief(name: string, vars: Record<string, string>) {
+  const text = await readFile(join(ROOT, "prompts", `${name}.md`), "utf8");
+  return text.replace(/\{\{([A-Z_]+)\}\}/g, (_, k: string) => vars[k] ?? `{{${k}}}`);
+}
+
+const tail = (s: string, n = 4000) => (s.length > n ? "…" + s.slice(-n) : s);
+const notify = (url: string | null | undefined, title: string, body: string) =>
+  url ? fetch(url, { method: "POST", body, headers: { Title: title } }).catch(() => {}) : undefined;
+
+interface Night {
   cfg: Config;
   repo: string;
   sb: Sandbox;
@@ -27,57 +49,38 @@ interface Ctx {
   stop: AbortSignal;
 }
 
-/** Run one OpenCode turn as `agent` (builder, reviewer, reporter). */
-async function agentTurn(
-  ctx: Ctx,
-  agent: "builder" | "reviewer" | "reporter",
-  attempt: number,
-  text: string,
-  label: string,
-  timeoutMinutes = ctx.cfg.night.taskTimeoutMinutes,
-) {
-  const model = pickModel(ctx.cfg.models[agent], attempt);
-  await mkdir(logDir(ctx.repo), { recursive: true });
-  const res = await ctx.sb.run({
-    agent: opencode(model, { agent }),
-    prompt: text,
+/** One agent session; its log goes to ~/.local/state/nightshift/<project>/logs/<label>.log. */
+async function turn(n: Night, role: Role, attempt: number, prompt: string, label: string, minutes = n.cfg.night.taskTimeoutMinutes) {
+  const model = pickModel(n.cfg.models[role], attempt);
+  await mkdir(join(stateDir(n.repo), "logs"), { recursive: true });
+  const res = await n.sb.run({
+    agent: agentFor(model, role),
+    prompt,
     name: label,
-    idleTimeoutSeconds: ctx.cfg.night.idleTimeoutSeconds,
-    logging: { type: "file", path: join(logDir(ctx.repo), `${label}.log`) },
-    signal: AbortSignal.any([ctx.stop, AbortSignal.timeout(timeoutMinutes * 60_000)]),
+    idleTimeoutSeconds: n.cfg.night.idleTimeoutSeconds,
+    logging: { type: "file", path: join(stateDir(n.repo), "logs", `${label}.log`) },
+    signal: AbortSignal.any([n.stop, AbortSignal.timeout(minutes * 60_000)]),
   });
   return { model, res };
 }
 
-async function verify(sb: Sandbox, task: Task) {
-  for (const cmd of task.verify) {
-    const r = await sb.exec(cmd);
-    if (r.exitCode !== 0) return `\`${cmd}\` exited ${r.exitCode}\n${tail(r.stdout + "\n" + r.stderr)}`;
-  }
-  return undefined;
-}
+const Verdict = z.object({ pass: z.boolean(), issues: z.array(z.string()).default([]) });
 
-async function runTask(ctx: Ctx, file: TaskFile, task: Task) {
-  const st = ctx.state.tasks[task.id]!;
-  const max = task.max_attempts ?? ctx.cfg.night.maxAttempts;
-  const started = Date.now();
-  while (st.attempts < max && !ctx.stop.aborted) {
+async function runTask(n: Night, tasks: Task[], task: Task) {
+  const st = n.state.tasks[task.id]!;
+  const vars = { TASK_ID: task.id, TITLE: task.title, GOAL: task.goal, CLOSES: task.closes.join(", ") || "(none listed)" };
+  while (st.attempts < (task.max_attempts ?? n.cfg.night.maxAttempts) && !n.stop.aborted) {
     st.attempts++;
-    const done = file.tasks.filter((t) => ctx.state.tasks[t.id]?.status === "done").map((t) => `- ${t.id}: ${t.title}`);
-    const brief = await prompt("builder", {
-      PROJECT: file.project,
-      TASK_ID: task.id,
-      TITLE: task.title,
-      GOAL: task.goal,
-      CLOSES: task.closes.join(", ") || "(none listed)",
-      VERIFY: task.verify.map((c) => `- \`${c}\``).join("\n"),
-      NOTES: task.notes ?? "",
-      DONE: done.join("\n") || "(nothing yet)",
-      PREVIOUS_FAILURE: st.lastError ? `A previous attempt failed. Fix this first:\n\n${st.lastError}` : "",
-    });
     const label = `${task.id}-a${st.attempts}`;
     try {
-      const { model, res } = await agentTurn(ctx, "builder", st.attempts, brief, label, task.timeout_minutes);
+      const done = tasks.filter((t) => n.state.tasks[t.id]!.status === "done").map((t) => `- ${t.id}: ${t.title}`);
+      const { model, res } = await turn(n, "builder", st.attempts, await brief("builder", {
+        ...vars,
+        VERIFY: task.verify.map((c) => `- \`${c}\``).join("\n"),
+        NOTES: task.notes ?? "",
+        DONE: done.join("\n") || "(nothing yet)",
+        PREVIOUS_FAILURE: st.lastError ? `A previous attempt failed. Fix this first:\n\n${st.lastError}` : "",
+      }), label, task.timeout_minutes);
       st.models.push(model);
       st.commits.push(...res.commits.map((c) => c.sha));
     } catch (e) {
@@ -85,97 +88,83 @@ async function runTask(ctx: Ctx, file: TaskFile, task: Task) {
       continue;
     }
 
-    const failure = await verify(ctx.sb, task);
-    if (failure) {
-      st.lastError = failure;
-      await saveState(ctx.repo, ctx.state);
-      continue;
+    // The runner checks the work itself: the agent's own claim of success doesn't count.
+    st.lastError = undefined;
+    for (const cmd of task.verify) {
+      const r = await n.sb.exec(cmd);
+      if (r.exitCode !== 0) {
+        st.lastError = `\`${cmd}\` exited ${r.exitCode}\n${tail(r.stdout + "\n" + r.stderr)}`;
+        break;
+      }
     }
+    await saveState(n.repo, n.state);
+    if (st.lastError) continue;
 
-    const review = await prompt("reviewer", {
-      TASK_ID: task.id,
-      TITLE: task.title,
-      GOAL: task.goal,
-      CLOSES: task.closes.join(", ") || "(none listed)",
-      BASE: st.commits.length ? `${st.commits[0]}^` : "HEAD~1",
-    });
     try {
-      const { res } = await agentTurn(ctx, "reviewer", 1, review, `${label}-review`);
-      const m = [...res.stdout.matchAll(/<verdict>([\s\S]*?)<\/verdict>/g)].at(-1);
-      const v = Verdict.parse(JSON.parse(m?.[1] ?? "{}"));
+      const { res } = await turn(n, "reviewer", 1, await brief("reviewer", { ...vars, BASE: `${st.commits[0] ?? "HEAD~1"}^` }), `${label}-review`);
+      const v = Verdict.parse(JSON.parse([...res.stdout.matchAll(/<verdict>([\s\S]*?)<\/verdict>/g)].at(-1)?.[1] ?? "{}"));
       if (!v.pass) {
         st.lastError = `Reviewer rejected the change:\n${v.issues.map((i) => `- ${i}`).join("\n")}`;
         continue;
       }
     } catch (e) {
       // A broken reviewer shouldn't block green work: note it and accept.
-      st.lastError = undefined;
-      ctx.state.decisions = `${ctx.state.decisions ?? ""}\n- ${task.id}: review unavailable (${(e as Error).message}); accepted on verify alone.`;
+      n.state.notes.push(`${task.id}: review unavailable (${(e as Error).message}); accepted on verify alone.`);
     }
     st.status = "done";
-    st.lastError = undefined;
     break;
   }
   if (st.status !== "done") st.status = "parked";
-  st.minutes += Math.round((Date.now() - started) / 60000);
-  await saveState(ctx.repo, ctx.state);
+  await saveState(n.repo, n.state);
 }
 
 export async function night(repoArg: string) {
   const repo = resolve(repoArg);
   const cfg = await loadConfig();
-  const file = await loadTasks(repo); // read once, from the host
-
+  const { project, tasks } = await loadTasks(repo); // read once, from the host
   const stopAt = deadline(cfg.night.stopAt);
-  const day = new Date().toLocaleDateString("sv-SE"); // local YYYY-MM-DD, matches `date +%F`
-  const fresh = (): NightState => ({
-    project: file.project,
-    branch: `nightshift/${day}`,
-    startedAt: Date.now(),
+
+  // Resume a crashed night if its deadline hasn't passed; otherwise start fresh.
+  const saved = await loadState(repo);
+  const state: NightState = saved && Date.now() < saved.deadline ? saved : {
+    branch: `nightshift/${new Date().toLocaleDateString("sv-SE")}`, // local YYYY-MM-DD
     deadline: stopAt.getTime(),
-    tasks: Object.fromEntries(
-      file.tasks.map((t) => [t.id, { status: "pending" as const, attempts: 0, models: [], commits: [], minutes: 0 }]),
-    ),
-  });
-  // Resume only a night that hasn't reached its deadline (a crash at 01:00 resumes; tomorrow starts fresh).
-  const saved = await loadState(repo, fresh);
-  const state = Date.now() < saved.deadline ? saved : fresh();
-  // Resuming after a crash: give unfinished tasks their attempts back.
+    tasks: Object.fromEntries(tasks.map((t) => [t.id, { status: "pending", attempts: 0, models: [], commits: [] }])),
+    notes: [],
+  };
   for (const t of Object.values(state.tasks)) if (t.status === "pending") t.attempts = 0;
 
+  // Stop building 30 minutes before the deadline, to leave time for the report.
   const stop = new AbortController();
-  // Leave 30 minutes for the integration pass and the report.
-  const timer = setTimeout(() => stop.abort(new Error("deadline")), Math.max(0, stopAt.getTime() - Date.now() - 30 * 60_000));
+  const timer = setTimeout(() => stop.abort(new Error("deadline")), Math.max(0, state.deadline - Date.now() - 30 * 60_000));
 
   await using sb = await createSandbox({ branch: state.branch, sandbox: sandboxFor(cfg), cwd: repo });
-  const ctx: Ctx = { cfg, repo, sb, state, stop: stop.signal };
-  await notify(cfg.notify.ntfyUrl, `Nightshift started: ${file.project}`, `${file.tasks.length} tasks, stop at ${cfg.night.stopAt}`, 2);
+  const n: Night = { cfg, repo, sb, state, stop: stop.signal };
+  await notify(cfg.ntfyUrl, `Nightshift started: ${project}`, `${tasks.length} tasks, stop at ${cfg.night.stopAt}`);
 
-  for (let task = nextTask(file, state); task && !stop.signal.aborted; task = nextTask(file, state)) {
+  const ready = () => tasks.find((t) => state.tasks[t.id]!.status === "pending" && t.depends_on.every((d) => state.tasks[d]!.status === "done"));
+  for (let task = ready(); task && !stop.signal.aborted; task = ready()) {
     console.log(`\n=== ${task.id}: ${task.title}`);
-    await runTask(ctx, file, task);
+    await runTask(n, tasks, task);
     console.log(`=== ${task.id}: ${state.tasks[task.id]!.status}`);
   }
   clearTimeout(timer);
 
-  // Morning report: written by an agent, from facts the runner collected.
   const facts = {
-    project: file.project,
+    project,
     branch: state.branch,
     stoppedBy: stop.signal.aborted ? "deadline" : "task graph finished",
-    tasks: file.tasks.map((t) => ({ id: t.id, title: t.title, closes: t.closes, ...state.tasks[t.id] })),
-    blockedByParked: file.tasks.filter((t) => state.tasks[t.id]?.status === "pending").map((t) => t.id),
-    runnerNotes: state.decisions ?? "",
+    tasks: tasks.map((t) => ({ id: t.id, title: t.title, closes: t.closes, ...state.tasks[t.id] })),
+    runnerNotes: state.notes,
   };
   try {
-    await agentTurn({ ...ctx, stop: new AbortController().signal }, "reporter", 1,
-      await prompt("reporter", { FACTS: JSON.stringify(facts, null, 2) }), "morning-report");
+    await turn({ ...n, stop: new AbortController().signal }, "reporter", 1, await brief("reporter", { FACTS: JSON.stringify(facts, null, 2) }), "morning-report");
   } catch (e) {
     console.error(`Report agent failed: ${(e as Error).message}`);
   }
 
-  const done = file.tasks.filter((t) => state.tasks[t.id]?.status === "done").length;
-  const msg = `${done}/${file.tasks.length} tasks done on branch ${state.branch}. Check it out and read MORNING.md.`;
-  await notify(cfg.notify.ntfyUrl, `Nightshift finished: ${file.project}`, msg, done === file.tasks.length ? 3 : 4);
+  const done = tasks.filter((t) => state.tasks[t.id]!.status === "done").length;
+  const msg = `${done}/${tasks.length} tasks done on branch ${state.branch}. Check it out and read MORNING.md.`;
+  await notify(cfg.ntfyUrl, `Nightshift finished: ${project}`, msg);
   console.log(`\n${msg}`);
 }

@@ -12,9 +12,8 @@
       "Bash(git log *)"
     ],
     "ask": [
-      "Bash(npm run spike *)",
-      "Bash(npm run night *)",
-      "Bash(npm run preflight *)",
+      "Bash(npm run try *)",
+      "Bash(npm run ns *)",
       "Bash(npx tsx src/cli.ts *)",
       "Bash(sbx *)",
       "Bash(git push *)"

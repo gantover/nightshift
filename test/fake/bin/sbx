@@ -3,7 +3,11 @@
 echo "sbx $*" >> "$FAKE_SBX_LOG"
 cmd=$1; shift
 case $cmd in
-  create) [[ " $* " == *" --no-progress "* ]] && { echo "error: unknown flag: --no-progress" >&2; exit 1; }; exit 0 ;;
+  create)
+    [[ " $* " == *" --no-progress "* ]] && { echo "error: unknown flag: --no-progress" >&2; exit 1; }  # sbx < 0.48
+    while [[ $# -gt 0 ]]; do [[ $1 == --kit ]] && { [[ -f $2/nightshift.yaml ]] || { echo "error: kit $2 not found" >&2; exit 1; }; kit=1; }; shift; done
+    [[ -n ${kit:-} ]] || { echo "error: created without --kit" >&2; exit 1; }
+    exit 0 ;;
   exec)
     detach=0; while [[ $1 == -* ]]; do [[ $1 == -d ]] && detach=1; shift; done
     shift; [[ $1 == -- ]] && shift

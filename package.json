@@ -3,13 +3,11 @@
   "version": "0.1.0",
   "description": "Plan by day, build by night: Sandcastle + Docker Sandboxes + OpenCode.",
   "scripts": {
-    "ns": "tsx src/cli.ts",
-    "spike": "tsx src/cli.ts spike",
-    "preflight": "tsx src/cli.ts preflight",
-    "night": "tsx src/cli.ts night",
-    "typecheck": "tsc",
+    "check": "tsc && bash test/fake/run.sh",
     "test": "bash test/fake/run.sh",
-    "check": "tsc && bash test/fake/run.sh"
+    "typecheck": "tsc",
+    "try": "bash examples/try.sh",
+    "ns": "tsx src/cli.ts"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.12.0",

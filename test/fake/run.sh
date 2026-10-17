@@ -14,8 +14,8 @@ tasks:
   - { id: blocked, title: Blocked by never, goal: g, depends_on: [never], verify: ["true"] }
 Y
 echo ".sandcastle/" > .gitignore && git add -A && git -c user.email=t@t -c user.name=t commit -qm init
-sed -e "s#workdir: /home/agent/workspace#workdir: $T/vm/workspace#" -e '/^  seed:/,/^    - bash /d' \
-    -e 's/^  keep: false.*/  keep: false\n  seed: []\n  setup: []/' "$ROOT/nightshift.yaml" > "$T/ns.yaml"
+# Same config, but "the sandbox" is a local folder.
+sed "s#^  keep: false.*#  keep: false\n  workdir: $T/vm/workspace#" "$ROOT/nightshift.yaml" > "$T/ns.yaml"
 cd "$ROOT"
 PATH="$HERE/bin:$PATH" NIGHTSHIFT_CONFIG="$T/ns.yaml" XDG_STATE_HOME="$T/state" FAKE_SBX_LOG="$T/sbx.log" \
   npx tsx src/cli.ts night "$P"

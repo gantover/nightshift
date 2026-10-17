@@ -3,9 +3,8 @@
   "permission": {
     "bash": {
       "*": "allow",
-      "npm run spike*": "ask",
-      "npm run night*": "ask",
-      "npm run preflight*": "ask",
+      "npm run try*": "ask",
+      "npm run ns*": "ask",
       "npx tsx src/cli.ts *": "ask",
       "sbx *": "ask",
       "git push*": "ask"

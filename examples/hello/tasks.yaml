@@ -1,0 +1,16 @@
+project: hello
+tasks:
+  - id: hello
+    title: Write hello.txt
+    goal: Create hello.txt containing exactly the word nightshift, and nothing else.
+    closes: [AC-1, AC-2]
+    verify:
+      - grep -qx nightshift hello.txt
+      - command -v rtk ast-grep fd playwright-cli
+  - id: readme
+    title: Write a one-sentence README
+    goal: Create README.md with one sentence saying this repo is a Nightshift smoke test.
+    closes: [AC-3]
+    depends_on: [hello]
+    verify:
+      - test -s README.md

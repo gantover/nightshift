@@ -11,6 +11,6 @@ Work in three stages and tell the user which stage you're in.
 2. **Spec** — load the `write-spec` skill and write SPEC.md. Show the acceptance criteria to the user and revise until they agree each one is right and checkable.
 3. **Plan** — load the `plan-tasks` skill and write tasks.yaml. Walk the user through the task order and the verify commands.
 
-Finish by committing SPEC.md, tasks.yaml and any AGENTS.md updates, then tell the user to run `ns preflight`.
+Finish by committing SPEC.md, tasks.yaml and any AGENTS.md updates, then tell the user to merge the `nightshift/plan` branch and start the night (`ns night <repo>`).
 
 Never start building. If the user asks you to, remind them that the night does that and offer to tighten the plan instead.

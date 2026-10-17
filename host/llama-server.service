@@ -1,7 +1,7 @@
 # systemd user unit: the local model on :8080 for OpenCode (installed by host/install-llama.sh).
 #   journalctl --user -u llama-server -f
 # First start downloads ~94 GB into ~/.cache/llama.cpp. --alias is the model id in
-# opencode/opencode.json; -c must be >= its "limit.context". -np 1: the night runs one agent.
+# kit/opencode/opencode.json; -c must be >= its "limit.context". -np 1: the night runs one agent.
 # -fit off: fail loudly instead of silently moving experts to the CPU. --load-mode none:
 # no mmap, so the file isn't also held in page cache. -c 262144 is the model's full context;
 # llama.cpp allocates it all at startup (~7.5 GiB), and --cache-ram 0 stops the prompt cache

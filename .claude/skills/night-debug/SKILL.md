@@ -5,7 +5,7 @@ description: Diagnose a Nightshift night that went wrong (parked tasks, crashes,
 
 # Debug a night
 
-Read-only until you have a diagnosis. Never rerun a night or the spike without the user's go-ahead: both spend tokens.
+Read-only until you have a diagnosis. Never rerun a night or `npm run try` without the user's go-ahead: both spend tokens.
 
 1. **Which project and night?** State lives in `~/.local/state/nightshift/<project>/state.json` (project = the repo folder name). Note `branch`, `deadline` and each task's `status`, `attempts`, `models` and `lastError`.
 2. **Classify each non-done task:**

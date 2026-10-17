@@ -1,0 +1,29 @@
+# syntax=docker/sandbox-kit:3
+# Nightshift mixin: the tools and OpenCode setup every night agent needs,
+# built once into an image layer instead of installed at each sandbox start.
+# Spec: https://github.com/docker/sandbox-kit-spec (v3; needs sbx >= 0.45).
+#
+# Everything lands under /opt/nightshift. The runner points OpenCode at it with
+# OPENCODE_CONFIG / OPENCODE_CONFIG_DIR (see `sandbox.env` in nightshift.yaml),
+# so nothing is written into /home/agent and the workload's own config stays.
+schemaVersion: "3"
+kind: mixin
+displayName: Nightshift
+description: rtk, ast-grep, fd, playwright-cli, plus Nightshift's OpenCode agents and skills.
+version: "0.2.0"
+
+dockerfile: ./nightshift.dockerfile
+
+capabilities:
+  # Skills are exposed by sbx in the agent's skills folder (~/.config/opencode/skills).
+  - type: com.docker.sandbox/agent-skill@1
+    config: { path: /opt/nightshift/opencode/skills/grill }
+  - type: com.docker.sandbox/agent-skill@1
+    config: { path: /opt/nightshift/opencode/skills/write-spec }
+  - type: com.docker.sandbox/agent-skill@1
+    config: { path: /opt/nightshift/opencode/skills/plan-tasks }
+
+  # Keep the VM up between the runner's separate `sbx exec` calls.
+  # Optional: sbx versions that don't know it skip it (sbx.ts has a fallback).
+  - type: com.docker.sandbox/long-running@1
+    optional: true
