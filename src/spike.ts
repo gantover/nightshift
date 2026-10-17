@@ -53,8 +53,8 @@ export async function spike(keep = false) {
   await probe("opencode installed", "opencode --version", (_, c) => c === 0);
   await probe("streaming exec (onLine)", "for i in 1 2 3; do echo line$i; sleep 1; done", (o) => o.includes("line3"));
   await probe("stdin piping (sbx exec -i)", "cat", (o) => o.includes("piped-ok"), "piped-ok\n");
-  // SPIKE: OpenCode's websearch calls Exa's hosted MCP; any HTTP status means the policy lets it through.
-  await probe("websearch: OPENCODE_ENABLE_EXA set, mcp.exa.ai reachable", 'echo "exa=$OPENCODE_ENABLE_EXA http=$(curl -s -m 5 -o /dev/null -w %{http_code} https://mcp.exa.ai/mcp)"', (o) => o.includes("exa=1") && !o.includes("http=000"));
+  // SPIKE: OpenCode's websearch calls Exa or Tinyfish (hosted MCP); any HTTP status means the policy lets it through.
+  await probe("websearch: OPENCODE_ENABLE_EXA set, search hosts reachable", 'echo "exa=$OPENCODE_ENABLE_EXA" $(for h in mcp.exa.ai agent.tinyfish.ai; do echo "$h=$(curl -s -m 5 -o /dev/null -w %{http_code} https://$h/mcp)"; done)', (o) => o.includes("exa=1") && !o.includes("=000"));
   if (Object.values(cfg.models).flat().some((m) => m.startsWith("opencode-go/")))
     await probe("OPENCODE_API_KEY is a placeholder, not the key", "printenv OPENCODE_API_KEY | cut -c1-7", (o) => o.trim().length > 0 && !o.startsWith("sk-"));
   await probe("local model reachable", "curl -s -m 5 http://host.docker.internal:8080/v1/models | head -c 200", (o) => o.includes("data"));

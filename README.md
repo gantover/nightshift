@@ -24,12 +24,10 @@ The referee stays on the host: `tasks.yaml` is read once at launch, verify comma
 ```bash
 git clone <this repo> ~/nightshift && cd ~/nightshift && npm ci
 
-# 1. Local model on :8080 (run it as a user service). ROCm build of llama.cpp (-DGPU_TARGETS=gfx1151).
-#    UD-IQ4_XS (~94 GB) leaves ~30 GiB for the desktop and the sbx sandbox; UD-Q4_K_XL (111 GB) is a bit better but leaves ~10.
-#    --jinja: tool calling. --alias: the id opencode/opencode.json and nightshift.yaml use.
-#    -c must be >= the "limit.context" in opencode/opencode.json.
-llama-server -hf unsloth/Qwen3.8-Flash-Next-GGUF:UD-IQ4_XS --alias qwen3.8-flash-next --jinja -ngl 999 -fa on \
-  -c 65536 --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0 --host 127.0.0.1 --port 8080
+# 1. Local model on :8080: builds llama.cpp for the 8060S (ROCm, gfx1151) and installs
+#    host/llama-server.service (Qwen3.8-Flash-Next UD-IQ4_XS, ~94 GB download on first start).
+#    Vulkan fallback if the ROCm build fails: -DGGML_VULKAN=ON instead of the HIP flags.
+./host/install-llama.sh
 
 # 2. Secrets: kept in your keyring; the sandbox only sees placeholders.
 sbx secret set-custom --host opencode.ai --env OPENCODE_API_KEY --value "$OPENCODE_API_KEY"  # only if you list opencode-go models
@@ -54,7 +52,7 @@ Set global secrets **before** creating sandboxes; existing ones don't pick them 
 - the keep-alive sleeper preventing auto-stop between execs;
 - the Go key arriving as a placeholder and being swapped by the proxy on `opencode.ai`;
 - reaching llama-server at `host.docker.internal:8080`;
-- websearch: `OPENCODE_ENABLE_EXA` set and `mcp.exa.ai` allowed by the policy;
+- websearch: `OPENCODE_ENABLE_EXA` set and `mcp.exa.ai` / `agent.tinyfish.ai` allowed by the policy;
 - which tools `sandbox/setup.sh` managed to install.
 
 Fix what fails, then paste the table into the design doc.
@@ -75,7 +73,7 @@ opencode/            payload copied into each sandbox: config, agents, skills fo
 prompts/             per-turn briefs the runner fills in
 templates/project/   SPEC.md, AGENTS.md, tasks.yaml, DECISIONS.md for `ns init`
 policies/            sbx network policies
-host/                systemd user unit (sleep inhibitor, restart on crash)
+host/                systemd user units (night run, llama-server) and install-llama.sh
 test/fake/           fake sbx + opencode for a token-free dry run
 ```
 

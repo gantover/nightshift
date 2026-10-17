@@ -19,7 +19,7 @@
         "qwen3.8-flash-next": {
           "name": "Qwen3.8-Flash-Next (local)",
           "attachment": true,
-          "limit": { "context": 65536, "output": 8192 }
+          "limit": { "context": 262144, "output": 8192 }
         }
       }
     }

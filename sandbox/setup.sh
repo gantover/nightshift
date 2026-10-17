@@ -14,7 +14,7 @@ grep -q 'nightshift-path' "$HOME/.profile" 2>/dev/null ||
   echo 'export PATH="$HOME/.local/bin:$PATH" # nightshift-path' >>"$HOME/.profile"
 export PATH="$HOME/.local/bin:$PATH"
 
-# websearch for non-Go models: Exa's hosted MCP, no key (allowed in policies/build.sh).
+# websearch for non-Go models: Exa/Tinyfish hosted MCP, no key (allowed in policies/build.sh).
 grep -q 'OPENCODE_ENABLE_EXA' "$HOME/.profile" 2>/dev/null || echo 'export OPENCODE_ENABLE_EXA=1' >>"$HOME/.profile"
 
 step "apt: ripgrep fd jq"

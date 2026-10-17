@@ -15,7 +15,7 @@ Nightshift runs coding agents unattended overnight. On the host, a TypeScript ru
 | `prompts/` | Briefs the runner fills in and sends to night agents each turn. |
 | `templates/project/` | Files `ns init` copies into a target project (SPEC.md, AGENTS.md, tasks.yaml…). Its AGENTS.md is for night agents, not for you. |
 | `sandbox/setup.sh` | Runs inside each new sandbox to install tools. |
-| `policies/`, `host/` | sbx network policy, systemd unit. Host setup, run by the user. |
+| `policies/`, `host/` | sbx network policy, systemd units, llama.cpp install. Host setup, run by the user. |
 
 ## Where Sandcastle is used
 
